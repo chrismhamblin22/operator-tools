@@ -519,52 +519,97 @@ def build_task_context() -> str:
 
 
 def render_chat() -> None:
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
+    # Initialise chat store: {id: {name, messages}}
+    if "chats" not in st.session_state:
+        first_id = str(uuid.uuid4())
+        st.session_state.chats = {first_id: {"name": "General", "messages": []}}
+        st.session_state.active_chat = first_id
 
-    st.markdown("### Ask Claude")
-    st.caption("Claude has full context of your current tasks. Ask for advice, help prioritising, drafting, or anything else.")
+    chats = st.session_state.chats
+    active_id = st.session_state.get("active_chat", next(iter(chats)))
 
-    # Render existing messages
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+    # ── Left panel: chat list ──────────────────────────────────────────────────
+    list_col, chat_col = st.columns([1, 3])
 
-    # Input
-    if prompt := st.chat_input("Ask anything…"):
-        st.session_state.chat_history.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+    with list_col:
+        st.markdown("**Conversations**")
 
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking…"):
-                try:
-                    client  = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-                    system  = (
-                        "You are a highly capable executive assistant helping a busy operator "
-                        "manage their work. Be concise, direct, and practical.\n\n"
-                        + build_task_context()
-                    )
-                    history = [
-                        {"role": m["role"], "content": m["content"]}
-                        for m in st.session_state.chat_history[:-1]
-                    ]
-                    response = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=1024,
-                        system=system,
-                        messages=history + [{"role": "user", "content": prompt}],
-                    )
-                    reply = response.content[0].text
-                    st.markdown(reply)
-                    st.session_state.chat_history.append({"role": "assistant", "content": reply})
-                except Exception as e:
-                    st.error(f"Error: {e}")
+        for cid, chat in chats.items():
+            is_active = cid == active_id
+            label = f"**{chat['name']}**" if is_active else chat["name"]
+            n = len([m for m in chat["messages"] if m["role"] == "user"])
+            col_btn, col_del = st.columns([4, 1])
+            with col_btn:
+                if st.button(f"{label} ({n})", key=f"sel_{cid}", use_container_width=True):
+                    st.session_state.active_chat = cid
+                    st.rerun()
+            with col_del:
+                if len(chats) > 1:
+                    if st.button("✕", key=f"del_chat_{cid}", help="Delete conversation"):
+                        del st.session_state.chats[cid]
+                        st.session_state.active_chat = next(iter(st.session_state.chats))
+                        st.rerun()
 
-    if st.session_state.chat_history:
-        if st.button("Clear conversation", key="clear_chat"):
-            st.session_state.chat_history = []
+        st.markdown("---")
+        new_name = st.text_input("New conversation", placeholder="Name…", key="new_chat_name", label_visibility="collapsed")
+        if st.button("＋ New chat", use_container_width=True):
+            name = new_name.strip() or f"Chat {len(chats) + 1}"
+            new_id = str(uuid.uuid4())
+            st.session_state.chats[new_id] = {"name": name, "messages": []}
+            st.session_state.active_chat = new_id
             st.rerun()
+
+    # ── Right panel: active chat ───────────────────────────────────────────────
+    with chat_col:
+        chat = chats[active_id]
+
+        # Editable name
+        new_name = st.text_input("Chat name", value=chat["name"], key=f"name_{active_id}", label_visibility="collapsed")
+        if new_name != chat["name"]:
+            st.session_state.chats[active_id]["name"] = new_name
+            st.rerun()
+
+        st.caption("Claude has full context of your current tasks.")
+
+        # Messages
+        for msg in chat["messages"]:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        # Input
+        if prompt := st.chat_input("Ask anything…", key=f"input_{active_id}"):
+            chat["messages"].append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking…"):
+                    try:
+                        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+                        system = (
+                            "You are a highly capable executive assistant helping a busy operator "
+                            "manage their work. Be concise, direct, and practical.\n\n"
+                            + build_task_context()
+                        )
+                        response = client.messages.create(
+                            model="claude-sonnet-4-6",
+                            max_tokens=1024,
+                            system=system,
+                            messages=[
+                                {"role": m["role"], "content": m["content"]}
+                                for m in chat["messages"]
+                            ],
+                        )
+                        reply = response.content[0].text
+                        st.markdown(reply)
+                        chat["messages"].append({"role": "assistant", "content": reply})
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+
+        if chat["messages"]:
+            if st.button("Clear conversation", key=f"clear_{active_id}"):
+                st.session_state.chats[active_id]["messages"] = []
+                st.rerun()
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
