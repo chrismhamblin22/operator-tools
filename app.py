@@ -213,7 +213,10 @@ def set_priority(task_id: str, new_pos: int) -> None:
 # ── Claude draft ─────────────────────────────────────────────────────────────
 
 def generate_draft(task: dict) -> str:
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY is not set in environment variables")
+    client = anthropic.Anthropic(api_key=api_key)
     topic   = task.get("topic", "")
     section = task.get("section", "")
     notes   = task.get("notes", "")
@@ -585,7 +588,7 @@ def render_chat() -> None:
             with st.chat_message("assistant"):
                 with st.spinner("Thinking…"):
                     try:
-                        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+                        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
                         system = (
                             "You are a highly capable executive assistant helping a busy operator "
                             "manage their work. Be concise, direct, and practical.\n\n"
