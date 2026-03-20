@@ -17,6 +17,7 @@ SECTIONS = {
     "priority": "⚡ Priority Actions",
     "chase":    "🔍 Chase This Week",
     "waiting":  "⏳ Waiting",
+    "products": "🗺️ Long Term Products",
 }
 
 TOPICS = ["", "CRO", "People", "Strategy", "Hiring", "Finance", "Marketing", "Ops", "Other"]
