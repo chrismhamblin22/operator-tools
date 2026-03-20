@@ -187,6 +187,12 @@ def delete_task(task_id: str) -> None:
         conn.commit()
 
 
+def update_topic(task_id: str, new_topic: str) -> None:
+    with get_db() as conn:
+        conn.execute("UPDATE tasks SET topic=? WHERE id=?", (new_topic, task_id))
+        conn.commit()
+
+
 def set_priority(task_id: str, new_pos: int) -> None:
     with get_db() as conn:
         active = conn.execute(
@@ -252,13 +258,25 @@ def render_task(task: dict, section: str, idx: int, total: int) -> None:
     tid   = task["id"]
     topic = task.get("topic", "")
 
-    title_md = f"**{task['title']}**"
-    if topic:
-        title_md += f"&nbsp;&nbsp;{badge_html(topic)}"
-    st.markdown(title_md, unsafe_allow_html=True)
-
-    if task.get("notes"):
-        st.caption(task["notes"])
+    title_col, topic_col = st.columns([5, 2])
+    with title_col:
+        title_md = f"**{task['title']}**"
+        st.markdown(title_md, unsafe_allow_html=True)
+        if task.get("notes"):
+            st.caption(task["notes"])
+    with topic_col:
+        current_idx = TOPICS.index(topic) if topic in TOPICS else 0
+        new_topic = st.selectbox(
+            "topic",
+            TOPICS,
+            index=current_idx,
+            key=f"topic_{tid}",
+            format_func=lambda x: "No topic" if x == "" else x,
+            label_visibility="collapsed",
+        )
+        if new_topic != topic:
+            update_topic(tid, new_topic)
+            st.rerun()
 
     if section == "priority":
         num_col, move_col, done_col, del_col = st.columns([1, 4, 1, 1])
