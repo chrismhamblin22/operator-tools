@@ -21,17 +21,35 @@ SECTIONS = {
     "products": "🗺️ Long Term Products",
 }
 
-TOPICS = ["", "CRO", "People", "Strategy", "Hiring", "Finance", "Marketing", "Ops", "Other"]
+TOPICS = [
+    "",
+    "Progression/People",
+    "Growth Strategy",
+    "Chief Economics Officer",
+    "Personal",
+    "Brand Marketing",
+    "Growth Marketing",
+    "Growth Product",
+    "New Bets",
+    "Company Strategy",
+    "Admin",
+    "Geos",
+    "Misc",
+]
 
 TOPIC_COLORS = {
-    "CRO":       "#6366F1",
-    "People":    "#10B981",
-    "Strategy":  "#EF4444",
-    "Hiring":    "#F59E0B",
-    "Finance":   "#8B5CF6",
-    "Marketing": "#EC4899",
-    "Ops":       "#06B6D4",
-    "Other":     "#9CA3AF",
+    "Progression/People":      "#10B981",
+    "Growth Strategy":         "#6366F1",
+    "Chief Economics Officer": "#8B5CF6",
+    "Personal":                "#F59E0B",
+    "Brand Marketing":         "#EC4899",
+    "Growth Marketing":        "#DB2777",
+    "Growth Product":          "#06B6D4",
+    "New Bets":                "#EF4444",
+    "Company Strategy":        "#4F46E5",
+    "Admin":                   "#9CA3AF",
+    "Geos":                    "#0891B2",
+    "Misc":                    "#6B7280",
 }
 
 # ── Database ──────────────────────────────────────────────────────────────────
