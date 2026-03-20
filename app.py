@@ -462,6 +462,75 @@ def render_dashboard() -> None:
         oldest.columns = ["Title", "Topic", "Section", "Age"]
         st.dataframe(oldest, use_container_width=True, hide_index=True)
 
+# ── Chat ─────────────────────────────────────────────────────────────────────
+
+def build_task_context() -> str:
+    """Summarise current tasks to inject as system context."""
+    all_tasks = load()
+    active = [t for t in all_tasks if not t["done"]]
+    if not active:
+        return "The user currently has no active tasks."
+    lines = ["Here is a summary of the user's current active tasks:\n"]
+    for section_key, section_label in SECTIONS.items():
+        tasks = [t for t in active if t["section"] == section_key]
+        if tasks:
+            lines.append(f"{section_label}:")
+            for t in tasks:
+                topic = f"[{t['topic']}] " if t.get("topic") else ""
+                notes = f" — {t['notes']}" if t.get("notes") else ""
+                lines.append(f"  • {topic}{t['title']}{notes}")
+    return "\n".join(lines)
+
+
+def render_chat() -> None:
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    st.markdown("### Ask Claude")
+    st.caption("Claude has full context of your current tasks. Ask for advice, help prioritising, drafting, or anything else.")
+
+    # Render existing messages
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Input
+    if prompt := st.chat_input("Ask anything…"):
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking…"):
+                try:
+                    client  = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+                    system  = (
+                        "You are a highly capable executive assistant helping a busy operator "
+                        "manage their work. Be concise, direct, and practical.\n\n"
+                        + build_task_context()
+                    )
+                    history = [
+                        {"role": m["role"], "content": m["content"]}
+                        for m in st.session_state.chat_history[:-1]
+                    ]
+                    response = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=1024,
+                        system=system,
+                        messages=history + [{"role": "user", "content": prompt}],
+                    )
+                    reply = response.content[0].text
+                    st.markdown(reply)
+                    st.session_state.chat_history.append({"role": "assistant", "content": reply})
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+    if st.session_state.chat_history:
+        if st.button("Clear conversation", key="clear_chat"):
+            st.session_state.chat_history = []
+            st.rerun()
+
+
 # ── App ───────────────────────────────────────────────────────────────────────
 
 def main():
@@ -529,7 +598,7 @@ def main():
     st.markdown("# Daily Work")
 
     counts     = {k: len(section_tasks(k)) for k in SECTIONS}
-    tab_labels = [f"{label}  ({counts[key]})" for key, label in SECTIONS.items()] + ["📊 Dashboard"]
+    tab_labels = [f"{label}  ({counts[key]})" for key, label in SECTIONS.items()] + ["📊 Dashboard", "💬 Ask Claude"]
     tabs       = st.tabs(tab_labels)
 
     for tab, (section_key, _) in zip(tabs, SECTIONS.items()):
@@ -545,8 +614,11 @@ def main():
                 for i, task in enumerate(tasks):
                     render_task(task, section_key, i, len(tasks))
 
-    with tabs[-1]:
+    with tabs[-2]:
         render_dashboard()
+
+    with tabs[-1]:
+        render_chat()
 
 
 if __name__ == "__main__":
