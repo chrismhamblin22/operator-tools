@@ -6,6 +6,7 @@ import sqlite3
 import streamlit as st
 from datetime import datetime
 from pathlib import Path
+import anthropic
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -185,6 +186,39 @@ def set_priority(task_id: str, new_pos: int) -> None:
             conn.execute("UPDATE tasks SET priority=? WHERE id=?", (pos, tid))
         conn.commit()
 
+# ── Claude draft ─────────────────────────────────────────────────────────────
+
+def generate_draft(task: dict) -> str:
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    topic   = task.get("topic", "")
+    section = task.get("section", "")
+    notes   = task.get("notes", "")
+
+    # Decide format based on section/topic
+    is_chase = section == "chase"
+    fmt = "a concise Slack message" if is_chase else "a clear, well-structured written response or note"
+
+    prompt = f"""You are helping a busy operator draft a response to a task.
+
+Task: {task['title']}
+Topic: {topic or 'General'}
+Context/Notes: {notes or 'None provided'}
+Section: {section}
+
+Write {fmt} that addresses this task. Be direct and professional.
+- If it's a chase/follow-up, write a polite but firm Slack message they can send
+- If it's an action or note, write a clear response or plan
+- Keep it concise — no more than 3-4 short paragraphs
+- Don't include a subject line or any meta-commentary, just the message itself"""
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=400,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return message.content[0].text
+
+
 # ── Render helpers ────────────────────────────────────────────────────────────
 
 def badge_html(topic: str) -> str:
@@ -245,6 +279,27 @@ def render_task(task: dict, section: str, idx: int, total: int) -> None:
     with del_col:
         if st.button("✕", key=f"del_{tid}", help="Delete task"):
             delete_task(tid)
+            st.rerun()
+
+    # Draft reply
+    if st.button("✍️ Draft reply", key=f"draft_{tid}", help="Generate a draft response with Claude"):
+        with st.spinner("Drafting…"):
+            try:
+                draft = generate_draft(task)
+                st.session_state[f"draft_text_{tid}"] = draft
+            except Exception as e:
+                st.error(f"Failed to generate draft: {e}")
+
+    if f"draft_text_{tid}" in st.session_state:
+        st.text_area(
+            "Draft",
+            value=st.session_state[f"draft_text_{tid}"],
+            height=150,
+            key=f"draft_area_{tid}",
+            label_visibility="collapsed",
+        )
+        if st.button("Clear", key=f"draft_clear_{tid}"):
+            del st.session_state[f"draft_text_{tid}"]
             st.rerun()
 
     st.divider()
